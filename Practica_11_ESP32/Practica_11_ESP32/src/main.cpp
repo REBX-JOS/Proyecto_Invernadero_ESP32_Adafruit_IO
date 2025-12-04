@@ -579,7 +579,27 @@ void setup() {
   webSocket.begin();
   webSocket.onEvent([](uint8_t num, WStype_t type, uint8_t * payload, size_t length) {
     if (type == WStype_TEXT) {
-      Serial.printf("WebSocket desde cliente %u: %s\n", num, payload);
+      String message = String((char*)payload);
+      StaticJsonDocument<256> doc;
+      deserializeJson(doc, message);
+      
+      String action = doc["action"];
+      
+      if (action == "control") {
+        String device = doc["device"];
+        bool state = doc["state"];
+        updateActuatorState(device, state);
+      } else if (action == "config") {
+        temp_min = doc["temp_min"];
+        temp_max = doc["temp_max"];
+        soil_threshold_low = doc["soil_low"];
+        soil_threshold_high = doc["soil_high"];
+      } else if (action == "setMode") {
+        modo_automatico = doc["mode"];
+      }
+      
+      // Enviar datos actualizados a todos los clientes
+      notifyAllClients();
     }
   });
 
