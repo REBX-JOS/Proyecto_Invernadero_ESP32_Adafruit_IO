@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Sistema de Control de Invernadero - ESP32</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌱</text></svg>">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>🌱 Sistema de Control de Invernadero</h1>
+      <p class="subtitle">Monitoreo y control en tiempo real - ESP32</p>
+      <div class="status-bar">
+        <span id="connection-status" class="status disconnected">Desconectado</span>
+        <span class="status" id="last-update">Última actualización: --:--:--</span>
+      </div>
+    </header>
+
+    <div class="dashboard">
+      <!-- Sección de Sensores -->
+      <div class="card sensor-card">
+        <div class="card-header">
+          <h2><span class="icon">📊</span> Sensores</h2>
+        </div>
+        <div class="card-content">
+          <div class="sensor-grid">
+            <div class="sensor-item">
+              <div class="sensor-label">Temperatura LM35</div>
+              <div class="sensor-value">
+                <span id="temp">--</span>
+                <span class="unit">°C</span>
+              </div>
+              <div class="sensor-description">Temperatura directa del suelo</div>
+            </div>
+            
+            <div class="sensor-item">
+              <div class="sensor-label">Temperatura Ambiente</div>
+              <div class="sensor-value">
+                <span id="tempAmb">--</span>
+                <span class="unit">°C</span>
+              </div>
+              <div class="sensor-description">DHT11 - Temperatura del aire</div>
+            </div>
+            
+            <div class="sensor-item">
+              <div class="sensor-label">Humedad Ambiente</div>
+              <div class="sensor-value">
+                <span id="hum">--</span>
+                <span class="unit">%</span>
+              </div>
+              <div class="sensor-description">DHT11 - Humedad relativa</div>
+            </div>
+            
+            <div class="sensor-item">
+              <div class="sensor-label">Humedad del Suelo</div>
+              <div class="sensor-value">
+                <span id="soil">--</span>
+                <span class="unit">ADC</span>
+              </div>
+              <div class="sensor-description">0-4095 (menor = más seco)</div>
+              <div class="soil-indicator">
+                <div class="soil-bar">
+                  <div id="soil-fill" class="soil-fill"></div>
+                </div>
+                <div class="soil-labels">
+                  <span>Seco</span>
+                  <span>Óptimo</span>
+                  <span>Húmedo</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección de Control de Actuadores -->
+      <div class="card control-card">
+        <div class="card-header">
+          <h2><span class="icon">⚙️</span> Control de Actuadores</h2>
+          <div class="mode-toggle">
+            <span class="mode-label">Modo:</span>
+            <button id="mode-toggle" class="toggle-btn auto-mode">AUTO</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="actuator-grid">
+            <div class="actuator-item">
+              <div class="actuator-info">
+                <h3>🌡️ Foco Calefactor</h3>
+                <p class="actuator-desc">Control de temperatura</p>
+              </div>
+              <div class="actuator-control">
+                <div class="status-indicator">
+                  <span id="foco-status" class="status-off">OFF</span>
+                  <div id="foco-led" class="led led-off"></div>
+                </div>
+                <button id="foco-btn" class="control-btn btn-off" onclick="toggleDeviceWS('foco')">
+                  Encender
+                </button>
+              </div>
+            </div>
+
+            <div class="actuator-item">
+              <div class="actuator-info">
+                <h3>💨 Ventilador</h3>
+                <p class="actuator-desc">Refrigeración y circulación</p>
+              </div>
+              <div class="actuator-control">
+                <div class="status-indicator">
+                  <span id="vent-status" class="status-off">OFF</span>
+                  <div id="vent-led" class="led led-off"></div>
+                </div>
+                <button id="vent-btn" class="control-btn btn-off" onclick="toggleDevice('vent')">
+                  Encender
+                </button>
+              </div>
+            </div>
+
+            <div class="actuator-item">
+              <div class="actuator-info">
+                <h3>💧 Bomba de Riego</h3>
+                <p class="actuator-desc">Sistema de irrigación</p>
+              </div>
+              <div class="actuator-control">
+                <div class="status-indicator">
+                  <span id="bomba-status" class="status-off">OFF</span>
+                  <div id="bomba-led" class="led led-off"></div>
+                </div>
+                <button id="bomba-btn" class="control-btn btn-off" onclick="toggleDevice('bomba')">
+                  Encender
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <div class="protections-info">
+            <h4>⏱️ Protecciones de Tiempo</h4>
+            <ul>
+              <li>Foco: máximo 5 minutos continuos</li>
+              <li>Ventilador: máximo 5 minutos continuos</li>
+              <li>Bomba: máximo 10 minutos continuos</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección de Configuración -->
+      <div class="card config-card">
+        <div class="card-header">
+          <h2><span class="icon">⚡</span> Configuración de Umbrales</h2>
+        </div>
+        <div class="card-content">
+          <div class="config-grid">
+            <div class="config-item">
+              <label for="tmin">Temperatura Mínima (°C)</label>
+              <div class="input-group">
+                <input type="number" id="tmin" value="20" step="0.1" min="0" max="50">
+                <span class="input-unit">°C</span>
+              </div>
+              <p class="config-description">Encender foco si baja de este valor</p>
+            </div>
+            
+            <div class="config-item">
+              <label for="tmax">Temperatura Máxima (°C)</label>
+              <div class="input-group">
+                <input type="number" id="tmax" value="24" step="0.1" min="0" max="50">
+                <span class="input-unit">°C</span>
+              </div>
+              <p class="config-description">Encender ventilador si supera este valor</p>
+            </div>
+            
+            <div class="config-item">
+              <label for="slow">Umbral Suelo Bajo (ADC)</label>
+              <div class="input-group">
+                <input type="number" id="slow" value="400" step="10" min="0" max="4095">
+              </div>
+              <p class="config-description">Activar bomba si ADC ≤ este valor</p>
+            </div>
+            
+            <div class="config-item">
+              <label for="shigh">Umbral Suelo Alto (ADC)</label>
+              <div class="input-group">
+                <input type="number" id="shigh" value="2000" step="10" min="0" max="4095">
+              </div>
+              <p class="config-description">Desactivar bomba si ADC ≥ este valor</p>
+            </div>
+          </div>
+          
+          <div class="config-actions">
+            <button class="btn-save" onclick="saveConfigWS()">
+              💾 Guardar Configuración
+            </button>
+            <button class="btn-default" onclick="loadDefaultConfig()">
+              🔄 Valores por Defecto
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sección de Gráficas -->
+      <div class="card chart-card">
+        <div class="card-header">
+          <h2><span class="icon">📈</span> Gráficas en Tiempo Real</h2>
+          <div class="chart-controls">
+            <button id="temp-chart-btn" class="chart-btn active" onclick="showChart('temp')">🌡️ Temp</button>
+            <button id="hum-chart-btn" class="chart-btn" onclick="showChart('hum')">💧 Hum</button>
+            <button id="soil-chart-btn" class="chart-btn" onclick="showChart('soil')">🌱 Suelo</button>
+          </div>
+        </div>
+        <div class="card-content">
+          <div class="chart-container">
+            <canvas id="chart" width="400" height="200"></canvas>
+          </div>
+          <div class="chart-info">
+            <p>Mostrando últimos 30 puntos de datos (actualización cada 2 segundos)</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Sistema de Control de Invernadero - ESP32 | 
+        <span id="ip-address">Conectando...</span> | 
+        <span id="firmware-version">v1.0.0</span>
+      </p>
+      <p class="footer-note">
+        🌿 Cultivando el futuro con tecnología IoT
+      </p>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+  <script src="chart.js"></script>
+</body>
+</html>
