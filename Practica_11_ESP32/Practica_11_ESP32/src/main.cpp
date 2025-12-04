@@ -59,12 +59,12 @@ LiquidCrystal_I2C lcd(LCD_ADDR, 20, 4);
 const byte ROWS = 4;
 const byte COLS = 4;
 byte rowPins[ROWS] = {32, 33, 14, 12};
-byte colPins[COLS] = {13, 18, 19, 23};
+byte colPins[COLS] = {23, 19, 18, 13};
 char keys[ROWS][COLS] = {
-  {'1', '2', '3', 'A'},
-  {'4', '5', '6', 'B'},
-  {'7', '8', '9', 'C'},
-  {'*', '0', '#', 'D'}
+  {'*', '7', '4', '1'},    // Fila 1 (pin 32)
+  {'0', '8', '5', '2'},    // Fila 2 (pin 33)
+  {'#', '9', '6', '3'},    // Fila 3 (pin 14)
+  {'D', 'C', 'B', 'A'}     // Fila 4 (pin 12)
 };
 Keypad keypad = Keypad(makeKeymap(keys), rowPins, colPins, ROWS, COLS);
 
@@ -199,7 +199,7 @@ void notifyAllClients() {
 }
 
 void imprimirEstadoLCD() {
-  portENTER_CRITICAL(&mux);
+  // Lee variables directamente sin secciones críticas
   float t = measured_temp;
   float ta = measured_temp_amb;
   float h = measured_hum;
@@ -208,10 +208,9 @@ void imprimirEstadoLCD() {
   bool v = fan_on;
   bool p = pump_on;
   bool m = modo_automatico;
-  portEXIT_CRITICAL(&mux);
 
   char buf[21];
-  lcd.clear();
+  //lcd.clear();
   snprintf(buf, sizeof(buf), "T:%.1f A:%.1f", t, ta);
   lcd.setCursor(0, 0);
   lcd.print(buf);
@@ -434,13 +433,30 @@ void webTask(void* pvParameters) {
 void lcdKeypadTask(void* pvParameters) {
   (void)pvParameters;
   unsigned long lastUpdate = 0;
+  bool lcdInitialized = false;
+  
+  // Intentar inicializar LCD varias veces
+  for (int i = 0; i < 3 && !lcdInitialized; i++) {
+    Wire.beginTransmission(LCD_ADDR);
+    if (Wire.endTransmission() == 0) {
+      lcdInitialized = true;
+      Serial.println("LCD inicializado correctamente");
+    } else {
+      Serial.println("Error inicializando LCD, reintentando...");
+      vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+  }
+  
+  if (!lcdInitialized) {
+    Serial.println("LCD no responde, continuando sin LCD");
+  }
+  
   while (1) {
     char key = keypad.getKey();
     if (key) {
       if (key == 'A') {
         modo_automatico = !modo_automatico;
         Serial.printf("Modo %s\n", modo_automatico ? "AUTO" : "MAN");
-        // Publicar cambio de modo en Adafruit IO
         if (mqttClient.connected()) {
           aioPublish(FEED_MODO, modo_automatico);
         }
@@ -453,10 +469,11 @@ void lcdKeypadTask(void* pvParameters) {
       }
     }
     
-    if (millis() - lastUpdate >= 500) {
+    if (lcdInitialized && millis() - lastUpdate >= 500) {
       imprimirEstadoLCD();
       lastUpdate = millis();
     }
+    
     vTaskDelay(pdMS_TO_TICKS(100));
   }
 }
@@ -546,7 +563,7 @@ void setup() {
   } else {
     Serial.println();
     Serial.println("❌ Error de conexión WiFi");
-    lcd.clear();
+    lcd.clear(); //Comentar o descomentar esta linea
     lcd.setCursor(0, 0);
     lcd.print("WiFi fallo!");
   }
@@ -617,7 +634,6 @@ void setup() {
   xTaskCreatePinnedToCore(lcdKeypadTask, "LCDKey", 4096, NULL, 1, NULL, 1);
   xTaskCreatePinnedToCore(cloudTask, "Cloud", 4096, NULL, 1, NULL, 1);
 
-  lcd.clear();
   lcd.print("Sistema listo");
   lcd.setCursor(0, 1);
   lcd.print("Adafruit IO OK");
