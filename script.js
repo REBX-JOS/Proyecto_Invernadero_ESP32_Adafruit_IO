@@ -1,7 +1,7 @@
 // Sistema de Control de Invernadero - ESP32 (Solo WebSocket)
 class GreenhouseController {
   constructor() {
-    this.espIp = "10.225.254.5";
+    this.espIp = "10.38.141.5";
     this.ws = null;
     this.isConnected = false;
     this.lastUpdate = null;

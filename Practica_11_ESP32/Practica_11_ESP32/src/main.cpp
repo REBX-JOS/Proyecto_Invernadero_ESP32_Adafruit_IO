@@ -210,7 +210,7 @@ void imprimirEstadoLCD() {
   bool m = modo_automatico;
 
   char buf[21];
-  //lcd.clear();
+  lcd.clear();
   snprintf(buf, sizeof(buf), "T:%.1f A:%.1f", t, ta);
   lcd.setCursor(0, 0);
   lcd.print(buf);
